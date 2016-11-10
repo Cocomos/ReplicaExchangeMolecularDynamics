@@ -1,0 +1,269 @@
+#! /bin/bash
+
+echo -e '\n\n\n
+		****************************************************************
+		*                                                              *
+		*   Wilkommen!                                                 *
+		*                                                              *
+		*      Replica Exchange Molecular Dynamics                     *
+		*                                                              *
+		*      Version: 1.0.1                                          *
+		*      Author: Trevor "Cocomos" Reutershan                     *
+		*      Institution: California State University, Long Beach    *
+		*                   Department of Chemistry and Biochemistry   *
+		*      Group: Tapavicza Computational Chemistry Lab            *
+		*             (Currently working on group name...)             *
+		*      First Edit: 11th October 2016                           *
+		*      Final Edit: 10th November 2016                          *
+		*                                                              *
+		****************************************************************\n\n\n'
+
+
+###### INITIALIZATION ######
+
+rm remd.log &> /dev/null
+quitter="\n\nYou have chosen to end the program prematurely. Quitter...\n\n"
+dialog=("\n\nEnter the temperatures in Kelvin you wish to run REMD.\n
+		\bPlease separate your inputs with either a comma or a space.\n\n"
+		"\n\nHow many cycles would you like to perform?\n\n"
+		"\n\nWhat is the number of steps you would like to do for each cycle?\n\n"
+		"\n\nPlease enter the desired timestep.\n\n"
+		"\n\nError: Your input was not a number. Please try again, dummy.\n\n"
+		"\n\nYou entered an input that is not recognized.\n
+		\bPlease choose an option from the list\n\n"
+		"\n\nAll values have been reset to their defaluts\n\n")
+mainMenu="
+        r:  Run program with current settings
+        t:  Enter temperatures (Default - 300K, 600K, 900K, & 1200K)
+        c:  Change number of REMD cycles (Default - 100)
+        s:  Indicate number of MD steps for each REMD cycle (Default - 200)
+        m:  Set the timestep size (Default - 40)
+        p:  Print current settings
+        d:  Reset all values to default
+   \052 or q:  Quit program\n\n\n"
+mainFlag=0
+testNum='^-?[0-9]+([.][0-9]+)?$'
+temps=(300 600 900 1200)
+numTemps=4
+cycles=100
+steps=200
+timestep=40
+echo -e "The whole program is just one menu. Con elegancia, con gracia.\n"
+
+###### USER INPUT ######
+
+while [ $mainFlag -eq 0 ]; do
+	echo -e "$mainMenu"
+	read input
+	if [ "$input" = "*" -o "$input" = "q" -o "$input" = "quit" ]; then
+		echo -e $quitter
+		exit 1
+	elif [ "$input" = "r" -o "$input" = "run" ]; then
+		mainFlag=1
+	elif [ "$input" = "t" -o "$input" = "temperature" ]; then
+		echo -e ${dialog[0]}
+		read temps
+		temps=(${temps//[[:alpha:][:punct:]]/ })
+		numTemps=${#temps[@]}
+		echo -e "\n\nNumber of temperatures entered = $numTemps\n"
+	elif [ "$input" = "c" -o "$input" = "s" -o "$input" = "m" ]; then
+		flag=0
+		while [ $flag -eq 0 ]; do
+			if [ "$input" = "c" ]; then flagg=1
+			elif [ "$input" = "s" ]; then flagg=2
+			elif [ "$input" = "m" ]; then flagg=3
+			fi
+			echo -e ${dialog[$flagg]}
+			read input0
+			if ! [[ $input0 =~ $testNum ]]; then
+				echo -e ${dialog[4]}
+			else
+				if [ $flagg -eq 1 ]; then cycles=$input0
+				elif [ $flagg -eq 2 ]; then steps=$input0
+				elif [ $flagg -eq 3 ]; then timestep=$input0
+				fi
+				flag=1
+			fi
+		done
+	elif [ "$input" = "d" -o "$input" = "default" ]; then
+		temps=(300 600 900 1200)
+		numTemps=4
+		cycles=100
+		steps=200
+		timestep=40
+		echo -e ${dialog[6]}
+	elif [ "$input" = "p" -o "$input" = "print" ]; then
+		echo -e "\n\nTempteratures: ${temps[@]}"
+		echo -e "REMD cycles: $cycles"
+		echo -e "MD steps per REMD cycle: $steps"
+		echo -e "Timestep: $timestep\n\n"
+	else
+		echo -e ${dialog[5]}
+	fi
+done
+
+######## Main Code #########
+
+temps=(`echo ${temps[@]} | xargs -n 1 | sort`)
+numAtoms=$(grep natoms template/control | sed "s/=/ /" | awk '{print $2}')
+relaxTime=$(echo "$timestep*10" | bc -l)
+logLng=$(echo "$cycles*$steps" | bc -l)
+
+rm -rf T*
+for ((i=0; i<numTemps; i++)); do
+	mkdir T"${temps[$i]}"
+done
+echo T* | xargs -n 1 cp template/* mdprep.in
+sed -i "s/TIMESTEP/$timestep/" T*/mdprep.in
+sed -i "s/STEPS/$steps/" T*/mdprep.in
+sed -i "s/RELAX/$relaxTime/" T*/mdprep.in
+sed -i "s/LOG/$logLng/" T*/mdprep.in
+for ((i=0; i<numTemps; i++)); do
+	cd T${temps[$i]}
+		sed -i "s/TEMP/${temps[$i]}/" mdprep.in
+		mdprep < mdprep.in &> /dev/null
+	cd ..
+done
+
+echo -e "\n\nFiles have been prepared, beginning dynamics.\n\n"
+echo -e "REMD: $cycles cycles of $steps MD steps\n\n" | tee -a remd.log
+echo -e "Starting date:" | tee -a remd.log
+date | tee -a remd.log
+echo -e "\n======================================================\n\n" | tee -a remd.log
+
+for ((i=1; i<=cycles; i++)); do
+	echo -e "\n\nCYCLE $i of $cycles\n______________________" | tee -a remd.log
+	for ((k=0; k<numTemps; k++)); do
+		(cd T${temps[k]}; nohup jobex -ri -md > remd.out &)
+	done
+	flag=1
+	while [ $flag -ne 0 ]; do
+		sleep 120s
+		flag=`echo -e $(grep "nsteps" T*/mdmaster | awk '{print $2}') | sed "s/ /+/g" | bc`
+		if [ $flag -eq 0 ]; then
+			echo -e "\nMD cycle finished. Evaluating switching probability..."
+		else
+			echo -e "\n$flag more MD steps across $numTemps temperature simulations to go."
+		fi
+		if [ -f EXIT ]; then
+			for ((l=0; l<numTemps; l++)); do
+				(cd T${temps[k]}; touch stop)
+			done
+			flag=0
+		fi
+	done
+	KE=($(grep -B$((numAtoms+1)) -h current T*/mdlog.1 | grep 0.000000 | awk '{print $1}' | sed "s/E/\*10\^/" | bc -l))
+	PE=($(grep -B$((numAtoms+1)) -h current T*/mdlog.1 | grep 0.000000 | awk '{print $2}'))
+	flag=0
+	for ((k=0; k<numTemps-1; k++)); do
+		for ((j=k+1; j<numTemps; j++)); do
+			prob[flag]=$(echo "e((${PE[k]} - ${PE[j]})*(1/${KE[k]} - 1/${KE[j]}))" | bc -l)
+			rand[flag]=$(echo "$RANDOM/32767" | bc -l)
+			relProb[flag]=$(echo "(${prob[flag]} - ${rand[flag]})/${prob[flag]}" | bc -l)
+			labels[flag]=`echo "$k$j"`
+			((flag++))
+		done
+	done
+	echo -e "Temperature: ${temps[@]} \n KineticEnergy: ${KE[@]} \n PotentialEnergy: ${PE[@]} \n
+			SwitchingProbability: ${prob[@]} \n RelativeProbability: ${relProb[@]}" | column -t | tee -a remd.log
+	numSwitches=$((numTemps/2))
+	numProbs=${#prob[@]}
+	flag=0; k=0
+	while [ $flag -lt $numSwitches ]; do
+		max=$(echo ${relProb[@]} | xargs -n 1 | sort -nr | head -1)
+		index=$(echo ${relProb[@]/$max//} | cut -d/ -f1 | wc -w | tr -d ' ')
+		if (( $(echo "${prob[index]} > ${rand[index]}" | bc -l) )); then
+			switchTemps[flag]=`echo "${temps[${labels[index]:0:1}]} ${temps[${labels[index]:1:1}]}"`
+			if [ $flag -gt 0 ]; then
+				checkDiff=(`printf "%s\n" ${switchTemps[flag]} ${switchTemps[@]:0:$flag} | sort | uniq -d`)
+				checkDiff=$((checkDiff + 0))
+				if [ $checkDiff -gt 0 ]; then
+					unset switchTemps[${#switchTemps[@]}-1]
+					flag=$((flag-1))
+				fi
+			fi
+			flag=$((flag+1))
+		fi
+		if [[ $k == $numProb ]]; then
+			flag=$numSwitches
+		else
+			((k++))
+		fi
+		labels=(`echo ${labels[@]/${labels[index]}}`)
+		relProb=(`echo ${relProb[@]/${relProb[index]}}`)
+	done
+	numSwitches=${#switchTemps[@]}
+	echo -e "\nNumber of switches $numSwitches" | tee -a remd.log
+	for ((k=0; k<numSwitches; k++)); do
+		flag=$(echo ${switchTemps[k]} | awk '{print $1}')
+		flagg=$(echo ${switchTemps[k]} | awk '{print $2}')
+		switchDir=`echo "T$flag T$flagg"`
+		echo -e "Switching temperatures $flag and $flagg" | tee -a remd.log
+		# Perform Trajectory Switch
+        for ((l=1; l<3; l++)); do
+            tmp=`echo $switchDir | awk '{print $'$l'}'`
+            mdLength=$(wc $tmp/mdlog.1 | awk '{print $'$l'}')
+            cutline=$((mdLength-3*numAtoms-4))
+            lines="$cutline,$mdLength"
+            sed -e "$lines"'d' $tmp/mdlog.1 > xxx; mv xxx $tmp/mdlog.1
+            tail -$((2*natoms+2)) $tmp/mdlog.1 > coord_$l
+            mdLength=$(wc $tmp/mdlog.1 | awk '{print $'$l'}')
+            cutline=$((mdLength-2*numAtoms-1))
+            lines="$cutline,$mdLength"
+            sed -e "$lines"'d' $tmp/mdlog.1 > xxx; mv xxx $tmp/mdlog.1
+            echo "\$current" >> $tmp/mdlog.1
+        done
+        tmp=`echo $switchDir | awk '{print $2}'`
+        cat coord_1 >> $tmp/mdlog.1
+        tmp=`echo $switchDir | awk '{print $1}'`
+        cat coord_2 >> $tmp/mdlog.1
+        for ((l=1; l<3; l++)); do
+            tmp=`echo $switchDir | awk '{print $'$l'}'`
+            echo "\$end" >> $tmp/mdlog.1
+            echo "\$coord" > $tmp/coord
+        done
+        tmp=`echo $switchDir | awk '{print $2}'`
+        head -$((numAtoms+1)) coord_1 | grep -v "t=" >> $tmp/coord
+        tmp=`echo $switchDir | awk '{print $1}'`
+        head -$((numAtoms+1)) coord_2 | grep -v "t=" >> $tmp/coord
+        for ((l=1; l<3; l++)); do
+            tmp=`echo $switchDir | awk '{print $'$l'}'`
+            echo "\$end" >> $tmp/coord
+            sed '$d' $tmp/energy > xxx; sed '$d' xxx > $tmp/energy
+            echo "\$end" >> $tmp/energy
+            loghist=`grep mdlog.1 $tmp/mdmaster | grep -v = | awk '{print $1}'`
+            newloghist=$((loghist-1))
+            linenr=`grep -nA2 log_history $tmp/mdmaster | grep mdlog.1 | cut -c1-1`
+            sed "$linenr"'s/.*/  '$newloghist'      mdlog.1/' < $tmp/mdmaster > xxx
+            mv xxx $tmp/mdmaster
+            from=`grep from $tmp/mdmaster | grep until | awk '{print $3}'`
+            until=`grep from $tmp/mdmaster | grep until | awk '{print $6}'`
+            fromnew=`echo "$from - $timestep" | bc -l`
+            untilnew=`echo "$until - $timestep" | bc -l`
+            linenr=`grep -n from $tmp/mdmaster | grep until | cut -c1-2`
+            sed "$linenr"'s/.*/ from t= '$fromnew' until t= '$untilnew' /' < $tmp/mdmaster > xxx
+            mv xxx $tmp/mdmaster
+        done
+	done
+	for ((l=0; l<numTemps; l++)); do
+        cat T${temps[l]}/mdmaster | sed 's/\$nsteps        0/\$nsteps        '$stepnr'/' > xxx
+        mv xxx T${temps[l]}/mdmaster
+    done
+    if [ -f EXIT ]; then
+        i=1000000000000
+        echo -e "\n\n\nEXIT file found. REMD will be stopped upon user request.\n" | tee -a remd.log
+		echo "Force Stop Date:" | tee -a remd.log
+		date | tee -a remd.log
+		echo -e "\n\n\n" | tee -a remd.log
+        rm EXIT
+    fi
+    let "i+=1"
+done
+
+echo -e "\n\n\nREMD Finished! Without [known] Issues!\n" | tee -a remd.log
+echo -e "Ending Date:" | tee -a remd.log
+date | tee -a remd.log
+echo -e "\n\n\n" | tee -a remd.log
+
+
+
