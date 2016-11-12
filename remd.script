@@ -211,56 +211,56 @@ for ((i=1; i<=cycles; i++)); do
 		switchDir=`echo "T$flag T$flagg"`
 		echo -e "Switching temperatures $flag K and $flagg K" | tee -a remd.log
 		# Perform Trajectory Switch
-        for ((l=1; l<3; l++)); do
-            tmp=`echo $switchDir | awk '{print $'$l'}'`
-            mdLength=$(wc $tmp/mdlog.1 | awk '{print $1}')
-            cutline=$((mdLength-3*numAtoms-4))
-            lines="$cutline,$mdLength"
-            sed -e "$lines"'d' $tmp/mdlog.1 > xxx; mv xxx $tmp/mdlog.1
-            tail -$((2*numAtoms+2)) $tmp/mdlog.1 > coord_$l
-            mdLength=$(wc $tmp/mdlog.1 | awk '{print $1}')
-            cutline=$((mdLength-2*numAtoms-1))
-            lines="$cutline,$mdLength"
-            sed -e "$lines"'d' $tmp/mdlog.1 > xxx; mv xxx $tmp/mdlog.1
-            echo "\$current" >> $tmp/mdlog.1
-        done
-        tmp=`echo $switchDir | awk '{print $2}'`
-        cat coord_1 >> $tmp/mdlog.1
-        tmp=`echo $switchDir | awk '{print $1}'`
-        cat coord_2 >> $tmp/mdlog.1
-        for ((l=1; l<3; l++)); do
-            tmp=`echo $switchDir | awk '{print $'$l'}'`
-            echo "\$end" >> $tmp/mdlog.1
-            echo "\$coord" > $tmp/coord
-        done
-        tmp=`echo $switchDir | awk '{print $2}'`
-        head -$((numAtoms+1)) coord_1 | grep -v "t=" >> $tmp/coord
-        tmp=`echo $switchDir | awk '{print $1}'`
-        head -$((numAtoms+1)) coord_2 | grep -v "t=" >> $tmp/coord
+        	for ((l=1; l<3; l++)); do
+            		tmp=`echo $switchDir | awk '{print $'$l'}'`
+            		mdLength=$(wc $tmp/mdlog.1 | awk '{print $1}')
+            		cutline=$((mdLength-3*numAtoms-4))
+            		lines="$cutline,$mdLength"
+            		sed -e "$lines"'d' $tmp/mdlog.1 > xxx; mv xxx $tmp/mdlog.1
+            		tail -$((2*numAtoms+2)) $tmp/mdlog.1 > coord_$l
+            		mdLength=$(wc $tmp/mdlog.1 | awk '{print $1}')
+            		cutline=$((mdLength-2*numAtoms-1))
+            		lines="$cutline,$mdLength"
+            		sed -e "$lines"'d' $tmp/mdlog.1 > xxx; mv xxx $tmp/mdlog.1
+            		echo "\$current" >> $tmp/mdlog.1
+        	done
+        	tmp=`echo $switchDir | awk '{print $2}'`
+        	cat coord_1 >> $tmp/mdlog.1
+        	tmp=`echo $switchDir | awk '{print $1}'`
+        	cat coord_2 >> $tmp/mdlog.1
+        	for ((l=1; l<3; l++)); do
+            		tmp=`echo $switchDir | awk '{print $'$l'}'`
+            		echo "\$end" >> $tmp/mdlog.1
+            		echo "\$coord" > $tmp/coord
+        	done
+        	tmp=`echo $switchDir | awk '{print $2}'`
+        	head -$((numAtoms+1)) coord_1 | grep -v "t=" >> $tmp/coord
+        	tmp=`echo $switchDir | awk '{print $1}'`
+        	head -$((numAtoms+1)) coord_2 | grep -v "t=" >> $tmp/coord
 		rm coord_*
-        for ((l=1; l<3; l++)); do
-            tmp=`echo $switchDir | awk '{print $'$l'}'`
-            echo "\$end" >> $tmp/coord
-            sed '$d' $tmp/energy > xxx; sed '$d' xxx > $tmp/energy
-            echo "\$end" >> $tmp/energy
-            loghist=$(grep mdlog.1 $tmp/mdmaster | grep -v = | awk '{print $1}')
-            newloghist=$((loghist-1))
-            linenr=`grep -nA2 log_history $tmp/mdmaster | grep mdlog.1 | cut -c1-2`
-            sed "$linenr"'s/.*/  '$newloghist'      mdlog.1/' < $tmp/mdmaster > xxx
-            mv xxx $tmp/mdmaster
-            from=`grep from $tmp/mdmaster | grep until | awk '{print $3}'`
-            until=`grep from $tmp/mdmaster | grep until | awk '{print $6}'`
-            fromnew=`echo "$from - $timestep" | bc -l`
-            untilnew=`echo "$until - $timestep" | bc -l`
-            linenr=`grep -n from $tmp/mdmaster | grep until | cut -c1-2`
-            sed "$linenr"'s/.*/ from t= '$fromnew' until t= '$untilnew' /' < $tmp/mdmaster > xxx
-            mv xxx $tmp/mdmaster
-        done
+        	for ((l=1; l<3; l++)); do
+            		tmp=`echo $switchDir | awk '{print $'$l'}'`
+            		echo "\$end" >> $tmp/coord
+            		sed '$d' $tmp/energy > xxx; sed '$d' xxx > $tmp/energy
+            		echo "\$end" >> $tmp/energy
+            		loghist=$(grep mdlog.1 $tmp/mdmaster | grep -v = | awk '{print $1}')
+            		newloghist=$((loghist-1))
+            		linenr=`grep -nA2 log_history $tmp/mdmaster | grep mdlog.1 | cut -c1-2`
+            		sed "$linenr"'s/.*/  '$newloghist'      mdlog.1/' < $tmp/mdmaster > xxx
+            		mv xxx $tmp/mdmaster
+            		from=`grep from $tmp/mdmaster | grep until | awk '{print $3}'`
+            		until=`grep from $tmp/mdmaster | grep until | awk '{print $6}'`
+            		fromnew=`echo "$from - $timestep" | bc -l`
+            		untilnew=`echo "$until - $timestep" | bc -l`
+            		linenr=`grep -n from $tmp/mdmaster | grep until | cut -c1-2`
+            		sed "$linenr"'s/.*/ from t= '$fromnew' until t= '$untilnew' /' < $tmp/mdmaster > xxx
+            		mv xxx $tmp/mdmaster
+        	done
 	done
 	for ((l=0; l<numTemps; l++)); do
-        cat T${temps[l]}/mdmaster | sed 's/\$nsteps        0/\$nsteps        '$steps'/' > xxx
-        mv xxx T${temps[l]}/mdmaster
-    done
+        	cat T${temps[l]}/mdmaster | sed 's/\$nsteps        0/\$nsteps        '$steps'/' > xxx
+        	mv xxx T${temps[l]}/mdmaster
+    	done
 done
 
 if [ ! -f EXIT ]; then
